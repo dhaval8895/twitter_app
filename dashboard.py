@@ -300,7 +300,7 @@ def logic(query):
     t.append(tweets)
 
 def get_tweets():
-    N = 6
+    N = 8
     dates = []
     startdate = (datetime.datetime.now() - datetime.timedelta(1))
     for i in range(N):
@@ -392,8 +392,8 @@ def on_buttonpress():
             Rank  = emojis['Rank'],
             color = Paired[10]
         )
-        labels = LabelSet(x="Rank", y="Count", text="emoji", level='glyph', render_mode='canvas', source = source_emoji, x_offset = -12,
-                 text_font_size="15pt")
+        labels = LabelSet(x="Rank", y="Count", text="emoji", level='glyph', render_mode='canvas', source = source_emoji, x_offset = -16, y_offset = -14,
+                 text_font_size="23pt")
         p.vbar(x="Rank", top="Count", width = 0.95, source = source_emoji, color = "color")
         p.xaxis.minor_tick_line_color = None  # turn off x-axis minor ticks
         p.yaxis.minor_tick_line_color = None  # turn off y-axis minor ticks
@@ -456,21 +456,33 @@ div1 = Div(text = """<html>
             padding: 0in; 
          }
          .square {
+         position: relative;
             background-color: #38A1F3;
             width: 1500px;
             height: 80px;
             border: 0px;
          }
-         .image {
-           content:url(https://drive.google.com/open?id=1efVHKDtRkSM0KO0kQ8A8I0YuSknNsaHY);
+         .square p{
+          font-size:30pt;
+          margin: 0;
+          background: #38A1F3;
+          position: relative;
+          top: 20%;
+          left: -17%;
+          text-align: center;
+          margin:auto;
+          padding:0;
+          height:5%;
+          font-family:Helvetica;
+          color:white;
+      width:35%;
+      transform: translate(50%, 50%)   
          }
-         <div style="text-align: center; width: 90%; padding: 0 0 0 10%; margin: 0; height: 60px; overflow: hidden;">
-             Twitter Analytics App
       </style>
    </head>
    <body>
-      <div class="square"></div>
-      <div class="image"></div>
+      <div class="square">
+      <p>Twitter Analytics Dashboard</p></div>
    </body>
 </html>""")
 
