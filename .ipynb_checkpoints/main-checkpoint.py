@@ -65,6 +65,13 @@ from wordcloud.wordcloud import WordCloud, STOPWORDS
 from PIL import Image
 from nltk.corpus import stopwords
 
+from bokeh.io import show, output_file
+from bokeh.plotting import figure
+from bokeh.models import ColumnDataSource, Range1d, LabelSet, Label
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
+
 def init_driver():
     chrome_options = Options()
     chrome_options.add_argument('--headless')
