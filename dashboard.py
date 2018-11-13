@@ -300,7 +300,7 @@ def logic(query):
     t.append(tweets)
 
 def get_tweets():
-    N = 8
+    N = 6
     dates = []
     startdate = (datetime.datetime.now() - datetime.timedelta(1))
     for i in range(N):
