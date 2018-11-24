@@ -1,3 +1,4 @@
+from __future__ import division
 from math import pi
 from bokeh.palettes import Category20c
 from bokeh.transform import cumsum
@@ -65,12 +66,25 @@ from wordcloud.wordcloud import WordCloud, STOPWORDS
 from PIL import Image
 from nltk.corpus import stopwords
 
+from nltk.sentiment.vader import SentimentIntensityAnalyzer as SIA
+#nltk.download('vader_lexicon')
 from bokeh.io import show, output_file
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, Range1d, LabelSet, Label
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
+from bokeh.models import ColumnDataSource, Range1d, LabelSet, Label, HoverTool
+from bokeh.palettes import Category20, Paired, Spectral
+
+
+
+import numpy as np
+from PIL import Image
+from bokeh.plotting import figure, show, output_file
+from pprint import pprint
+
+
+from sklearn.feature_extraction.text import CountVectorizer
+import lda
+import numpy as np
+topic_num=12
 
 def init_driver():
     chrome_options = Options()
@@ -134,7 +148,6 @@ def search_twitter(driver, query):
     driver.find_element_by_name("q").clear()
  
     # enter your search string in the search box:
-    print(query)
     box.send_keys(query)
  
     # submit the query (like hitting return):
@@ -283,10 +296,10 @@ text_input = TextInput(value="", width = 200, title = "Search Term")
 button = Button(label="Submit", width = 200)
 buttoncomb = row(button, Div(text = ""))
 
-t = []
+t = [] 
 def logic(query):
     #t = []
-    start = time.clock()
+    
     driver = init_driver()
     username = 'dhavalsawlani1995@gmail.com'
     password = 'iloveugod'
@@ -295,11 +308,12 @@ def logic(query):
     page_source = search_twitter(driver, query)
     tweets = extract_tweets(page_source)
     close_driver(driver)
-    end = time.clock()
-    print((end-start)/60)
+    
+    
     t.append(tweets)
 
 def get_tweets():
+    start = time.clock()
     N = 6
     dates = []
     startdate = (datetime.datetime.now() - datetime.timedelta(1))
@@ -312,6 +326,10 @@ def get_tweets():
             query.append(searchterm + " since:" + str(dates[i+1]) + " until:" + str(dates[i]))
         except:
             pass
+    #print('logs_' + searchterm + '_' + str(datetime.datetime.now()).split('.')[0]+ '.txt')
+    now = datetime.datetime.now()
+    log_file = open(searchterm + ' ' + str(now.month) + '-'+ str(now.day) +'-'+ str(now.year)+' '+
+                    str(now.hour)+'-'+str(now.minute)+'-'+str(now.second)+ '.txt', 'w')
     # Number of browsers to spawn
     thread_list = list()
     tt = []
@@ -321,14 +339,18 @@ def get_tweets():
         th = threading.Thread(name='Test {}'.format(i), target=logic, args = [query[i]])
         th.start()
         time.sleep(2)
-        print(th.name + ' started!')
+        log_file.write(th.name + ' started on: '+ str(datetime.datetime.now()).split('.')[0]+'\n\n')
+        log_file.write(query[i]+'\n\n')
         thread_list.append(th)
     
     # Wait for all thre<ads to complete
     for thread in thread_list:
         thread.join()
-    print('Test completed!')
-    print("Tweets extracted: " + str(sum([len(t[i]) for i in range(len(t))])))
+    end = time.clock()
+    log_file.write('Test completed on: '+ str(datetime.datetime.now()).split('.')[0]+'\n\n')
+    log_file.write("Tweets extracted: " + str(sum([len(t[i]) for i in range(len(t))])) + "\n")
+    log_file.write('Time taken: '+ str((end-start)/60))
+    log_file.close()
     return t
 
 source = ColumnDataSource(data=dict(Hashtag = [], Date = [], Tweet = []))
@@ -338,6 +360,7 @@ TableColumn(field="Date", title="Date", formatter = DateFormatter()),
 TableColumn(field="Tweet", title="Tweet"),
 ]
 data_table = DataTable(source=source, columns=columns, width=550, height=400)
+column2 = column([])
 
 source_emoji = ColumnDataSource(data=dict(emoji = [], Count = [], Rank = []))
 columns_emoji = [
@@ -348,7 +371,8 @@ TableColumn(field="Rank", title="Rank")
 data_table_emoji = DataTable(source=source_emoji, columns=columns_emoji, width=550, height=400)
 p = figure(title="Popular Emojis", toolbar_location=None, tools="", plot_height = 500, plot_width = 750)
 hover = HoverTool(
-        tooltips=[('Rank', '@Rank'), ('Emoji', '@emoji'), ('Count', '@Count')]
+        tooltips=[('Rank', '@Rank'), ('Emoji', '@emoji'), ('Count', '@Count')],
+        mode = 'vline'
         )
 
 p1 = figure(title="Popular Words", toolbar_location=None, tools="", plot_height = 500, plot_width = 750)
@@ -356,7 +380,30 @@ hover1 = HoverTool(
         tooltips=[('Rank', '@Rank'), ('Word', '@Word'), ('Count', '@Count')]
         )
 
+fig = figure(title="Most Frequent Singular Words" ,x_range=(0,500), y_range=(0,750),
+             plot_height = 500, plot_width = 750, tools="")
+fig.toolbar.logo = None
+fig.axis.axis_label=None
+fig.axis.visible=False
+fig.grid.grid_line_color = None
+fig.xaxis.minor_tick_line_color = None
+fig.xaxis.major_tick_line_color = None
+fig.yaxis.minor_tick_line_color = None
+fig.yaxis.major_tick_line_color = None
 
+sent = figure(title="Sentiment Polarity", toolbar_location=None, tools="", plot_height = 500, plot_width = 750)
+
+plot_events = figure(plot_width=750, plot_height=500, tools = "", x_range=(-0.5, 1.0), toolbar_location = None,
+                                  title = "Emotion Radar")
+plot_events.toolbar.logo = None
+plot_events.axis.axis_label=None
+plot_events.axis.visible=False
+plot_events.grid.grid_line_color = None
+plot_events.xaxis.minor_tick_line_color = None
+plot_events.xaxis.major_tick_line_color = None
+hover2 = HoverTool(
+        tooltips=[('Emotion', '@Emotion'), ('Percentage', '@Percentage')]
+        )
 def text_clean(message):
     nopunc = [i for i in message if i not in string.punctuation]
     nn = "".join(nopunc)
@@ -392,8 +439,8 @@ def on_buttonpress():
             Rank  = emojis['Rank'],
             color = Paired[10]
         )
-        labels = LabelSet(x="Rank", y="Count", text="emoji", level='glyph', render_mode='canvas', source = source_emoji, x_offset = -16, y_offset = -14,
-                 text_font_size="23pt")
+        labels = LabelSet(x="Rank", y="Count", text="emoji", level='glyph', render_mode='canvas', source = source_emoji,
+                          x_offset = -16, y_offset = -14, text_font_size="23pt")
         p.vbar(x="Rank", top="Count", width = 0.95, source = source_emoji, color = "color")
         p.xaxis.minor_tick_line_color = None  # turn off x-axis minor ticks
         p.yaxis.minor_tick_line_color = None  # turn off y-axis minor ticks
@@ -403,6 +450,8 @@ def on_buttonpress():
         p.add_layout(labels)
         p.xaxis.minor_tick_line_color = None
         p.xgrid.visible = False
+        p.ygrid.visible = False
+        p.xaxis.major_tick_line_color = None
         p.add_tools(hover)
         
         ####wordcloud
@@ -410,9 +459,9 @@ def on_buttonpress():
         for j in range(len(t)):
             for i in range(len(t[j])):
                 alltweets.append(t[j][i]['text'])
-        all_tweets = "".join(alltweets)
-        alll_tweets = text_clean(all_tweets)
-        ss = pd.DataFrame(pd.Series(alll_tweets).value_counts()).reset_index().rename(columns={'index':'Word', 0:'Count'})
+        combined_tweets = "".join(alltweets)
+        cleaned_tweets = text_clean(combined_tweets)
+        ss = pd.DataFrame(pd.Series(cleaned_tweets).value_counts()).reset_index().rename(columns={'index':'Word', 0:'Count'})
         ss['Rank'] = pd.Series(range(1, len(ss)))
         ss = ss.head(10)
         ss['Rank'] = ss['Rank'].apply(lambda x: int(x))
@@ -436,8 +485,150 @@ def on_buttonpress():
         p1.vbar(x="Rank", top="Count", width = 0.95, source = ColumnDataSource(data_text), color = "color")
         #p1.add_layout(labels_text)
         p1.xaxis.minor_tick_line_color = None
+        p1.xaxis.major_tick_line_color = None
         p1.xgrid.visible = False
+        p1.ygrid.visible = False
         p1.add_tools(hover1)
+        
+        
+        ###Actual wordcloud
+        from nltk.corpus import stopwords
+        stopwords = set(STOPWORDS)
+        stopwords.add('one')
+        stopwords.add('also')
+        stopwords.add('twitter')
+        stopwords.add('pic')
+        stopwords.add('https')
+        stopwords.add('bit')
+        stopwords.add('ly')
+        stopwords.add('via')
+        stopwords.add('buff')
+        wordcloud_good = WordCloud(colormap = "Dark2", width = 750, height = 500, stopwords=stopwords, scale = 4, max_words = 300,
+                          background_color='white').generate(combined_tweets)
+        wordcloud_good.to_file('temp.png')
+        word_img = Image.open('temp.png').convert('RGBA')
+        xdim, ydim = word_img.size
+        img = np.empty((ydim, xdim), dtype=np.uint32)
+        view = img.view(dtype=np.uint8).reshape((ydim, xdim, 4))
+        view[:,:,:] = np.flipud(np.asarray(word_img))
+
+        dim = max(xdim, ydim)
+        fig.image_rgba(image=[img], x=0, y=0, dw=500, dh=750)
+        
+        
+        ##Sentiments graph
+        def loadLexicon(fname):
+            newLex=set()
+            lex_conn=open(fname)
+            #add every word in the file to the set
+            for line in lex_conn:
+                newLex.add(line.strip())# remember to strip to remove the lin-change character
+            lex_conn.close()
+            return newLex
+        sia = SIA()
+        results = []
+        for line in alltweets:
+            pol_score = sia.polarity_scores(line)
+            pol_score['Tweet'] = line
+            results.append(pol_score)
+        polarity = pd.DataFrame(results)
+        most_neg = polarity.sort_values('compound', ascending = True)[0:5]
+        most_pos = polarity.sort_values('compound', ascending = False)[0:5]
+        polarity['Polarity'] = 0
+        polarity.loc[polarity['compound'] > 0, 'Polarity'] = 1
+        polarity.loc[polarity['compound'] < 0, 'Polarity'] = -1
+        perc = pd.DataFrame(polarity.Polarity.value_counts(normalize=True) * 100).reset_index().rename(columns = {'index':'Sentiment',
+                                                                                                                  'Polarity':'Percentage'})
+        perc.Percentage = perc.Percentage.apply(lambda x : round(x, 2))
+        perc["Percentage_Text"] = perc.Percentage.apply(lambda x : str(round(x, 2)) + "%")
+        data_text = dict(Sentiment = list(perc.Sentiment), Percentage = list(perc.Percentage), color = Category20[3],
+                         Percentage_Text = list(perc.Percentage_Text))
+        labels = LabelSet(x="Sentiment", y="Percentage", text="Percentage_Text", level='glyph', render_mode='css', source = ColumnDataSource(data_text),
+                          x_offset = -10, text_font_size="10pt")
+        sent.xaxis[0].ticker.desired_num_ticks = 3
+        sent.xaxis.major_label_overrides = {1: 'Positive',
+                                         0: 'Neutral',
+                                         -1: 'Negative'}
+        sent.xaxis.minor_tick_line_color = None
+        sent.xaxis.major_tick_line_color = None
+        sent.vbar(x="Sentiment", top="Percentage", width = 0.80, source = ColumnDataSource(data_text), color = "color")
+        sent.xgrid.visible = False
+        sent.ygrid.visible = False
+        sent.add_layout(labels)
+        
+        ##Emotion break down
+        nrc = pd.read_csv("NRC-Emotion-Lexicon-Wordlevel-v0.92.txt", sep = "\t", header = None, names=["term", "category", "flag"])
+        emotions = []
+        final = pd.DataFrame()
+        term = list(nrc.term)
+        for i in range(len(cleaned_tweets)):
+            if cleaned_tweets[i] in term:
+                sub = nrc[nrc.term == cleaned_tweets[i]]
+                s = sub[sub.flag == 1]
+                if list(s.category) != []:
+                    emotions.append(list(s.category))
+        emotions_clubed = []
+        for i in emotions:
+            for j in range(len(i)):
+                if i[j] == 'positive':
+                    i[j] = 'joy'
+                elif i[j] == 'negative':
+                    i[j] = 'sadness'
+                emotions_clubed.append(i[j])
+        radar = pd.DataFrame(pd.Series(emotions_clubed))[0].value_counts(normalize = True)
+        radar = round(radar * 100 , 2)
+        radar_df = pd.DataFrame(radar).reset_index()
+        radar_df['angle'] = radar_df[0]/radar_df[0].sum() * 2*pi
+        radar_df['color'] = Category20c[radar_df.shape[0]]
+        radar_df = radar_df.rename(columns = {'index':'Emotion', 0:'Percentage', 'angle':'Angle', 'color':'Color'})
+        source_events = ColumnDataSource(data=dict(Emotion = radar_df['Emotion'], Percentage = radar_df['Percentage'],
+                                           Angle = radar_df['Angle'], Color = radar_df['Color']))
+        plot_events.wedge(x=0, y=1, radius=0.47, start_angle=cumsum('Angle', include_zero=True), end_angle=cumsum('Angle'),
+                  line_color="white", fill_color='Color', source=source_events, legend = "Emotion")
+        
+        plot_events.add_tools(hover2)
+        
+        
+        ##LDA
+        stopwords = set(STOPWORDS)
+        stopwords.add('one')
+        stopwords.add('also')
+        stopwords.add('twitter')
+        stopwords.add('pic')
+        stopwords.add('https')
+        stopwords.add('bit')
+        stopwords.add('ly')
+        stopwords.add('via')
+        stopwords.add('buff')
+        tf_vectorizer = CountVectorizer(max_df=0.95, min_df=2, stop_words=stopwords)
+        matrix = tf_vectorizer.fit_transform(alltweets)
+        vocab=tf_vectorizer.get_feature_names()
+        model = lda.LDA(n_topics=topic_num, n_iter=900)
+        model.fit(matrix)
+        topics = []
+        topics.append("<b>Most Frequent Words used in 12 different Topics found in the search</b><br><br>")
+        top_words_num=20
+        topic_mixes= model.topic_word_
+        for i in range(topic_num):#for each topic
+            top_indexes=np.argsort(topic_mixes[i])[::-1][:top_words_num]                              
+            my_top=''
+            for ind in top_indexes:my_top+=vocab[ind]+' '
+            topics.append('TOPIC:'+str(i+1)+' --> '+str(my_top)+'<br><br>')
+        pos_nes = []
+        pos_neg = []
+        pos_nes.append("<b> Top 5 most Positive Tweets </b><br><br>")
+        pos = (["> "+i+'<br><br>' for i in most_pos['Tweet']])
+        pos_nes.append(pos)
+        pos_nes.append("<b> Top 5 most Negative Tweets </b><br><br>")
+        neg = (["> "+i+'<br><br>' for i in most_neg['Tweet']])
+        pos_nes.append(neg)
+        for i in range(len(pos_nes)):
+            pos_neg.append("".join(pos_nes[i]))
+        d = Div(text = """<div style="width: 49%; text-align: justify; float: left">"""+"".join(pos_neg)+"</div>"+"""
+        <div style="width: 49%; text-align: justify; float: right">"""+"".join(topics)+"""
+        </div><div style="width: 2%;text-align:justify;float:center">"""+" "+"</div>", width = 1500, height = 500)
+        column2.children.append(d)
+        
     else:
         pass
 
@@ -486,8 +677,7 @@ div1 = Div(text = """<html>
    </body>
 </html>""")
 
-layout = column(column(row(div1), row(widgetbox(text_input, width = 220), column(Div(text = ""), buttoncomb)) ,
-                                        row(p, p1)))
+layout = column(column(row(div1), row(widgetbox(text_input, width = 220), column(Div(text = ""), buttoncomb)),
+                                        row(p, fig), row(sent, plot_events), column(Div(text = ""), column2)))
 curdoc().add_root(layout)
 curdoc().title = "Twitter Analytics App"
-
